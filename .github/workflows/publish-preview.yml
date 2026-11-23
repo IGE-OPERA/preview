@@ -15,12 +15,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          RUN_ID=$(gh run list -R IGE-OPERA/ige-opera.github.io --workflow preview.yml --branch redesign --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          # Take the latest preview run on redesign regardless of status: the
+          # conclusion of a just-finished run may not have propagated to
+          # `--status success` queries yet (we hit this race in practice).
+          RUN_ID=$(gh run list -R IGE-OPERA/ige-opera.github.io --workflow preview.yml --branch redesign --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful preview run found yet."
+            echo "No preview run found yet."
             exit 1
           fi
-          echo "Publishing website-repo run $RUN_ID"
+          echo "Waiting for website-repo run $RUN_ID"
+          gh run watch "$RUN_ID" -R IGE-OPERA/ige-opera.github.io --exit-status --interval 10 || {
+            echo "Run $RUN_ID did not succeed; keeping the previous preview."
+            exit 1
+          }
           rm -rf dist && mkdir dist
           gh run download "$RUN_ID" -R IGE-OPERA/ige-opera.github.io -n preview-site -D dist
           test -f dist/index.html
