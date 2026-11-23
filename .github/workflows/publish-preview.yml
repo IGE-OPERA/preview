@@ -10,19 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download the latest preview-site artifact from the website repo
+        id: download
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -e
           RUN_ID=$(gh run list -R IGE-OPERA/ige-opera.github.io --workflow preview.yml --branch redesign --status success --limit 1 --json databaseId --jq '.[0].databaseId')
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful preview run found yet."; exit 0
+            echo "No successful preview run found yet."
+            exit 1
           fi
           echo "Publishing website-repo run $RUN_ID"
           rm -rf dist && mkdir dist
           gh run download "$RUN_ID" -R IGE-OPERA/ige-opera.github.io -n preview-site -D dist
           test -f dist/index.html
       - name: Publish to gh-pages (this repo)
-        if: ${{ steps.download.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
