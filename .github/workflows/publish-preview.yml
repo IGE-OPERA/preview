@@ -1,0 +1,36 @@
+name: Publish preview
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the latest preview-site artifact from the website repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=$(gh run list -R IGE-OPERA/ige-opera.github.io --workflow preview.yml --branch redesign --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful preview run found yet."; exit 0
+          fi
+          echo "Publishing website-repo run $RUN_ID"
+          rm -rf dist && mkdir dist
+          gh run download "$RUN_ID" -R IGE-OPERA/ige-opera.github.io -n preview-site -D dist
+          test -f dist/index.html
+      - name: Publish to gh-pages (this repo)
+        if: ${{ steps.download.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          git init -q
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b gh-pages
+          git add -A
+          git commit -qm "Preview update (from IGE-OPERA/ige-opera.github.io redesign)"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/IGE-OPERA/preview.git" gh-pages
